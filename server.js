@@ -6,26 +6,29 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
+// Ladda certifikatet
+const certPath = "./cert.pfx";
 const agent = new https.Agent({
-  pfx: fs.readFileSync("./cert.pfx"),
+  pfx: fs.readFileSync(certPath),
   passphrase: process.env.CERT_PASSWORD
 });
 
 const BASE_URL_VAROR = "https://privateapi.scb.se/nv0101/v1/sokpavar";
 const BASE_URL_FORETAG = "https://privateapi.scb.se/uf0101/v1/foretag";
 
+// 1. Grundläggande hälso-check
 app.get("/", (req, res) => {
-  res.send("SCB proxy is active");
+  res.send("Proxy is alive. Paths available: /scb-proxy/* and /foretag-proxy/*");
 });
 
-// NY STRUKTUR: Företagsregistret (uf0101)
-app.all("/foretag-proxy/*", async (req, res) => {
+// 2. Den nya routen för företag (uf0101) - Aggressiv matchning
+app.all("/foretag-proxy*", async (req, res) => {
   try {
-    // Tar allt efter /foretag-proxy/ och lägger på bas-URL:en
-    const path = req.params[0]; 
-    const url = `${BASE_URL_FORETAG}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    // Rensar prefixet för att få fram rätt sub-path
+    const subPath = req.url.replace("/foretag-proxy", "");
+    const url = `${BASE_URL_FORETAG}${subPath}`;
 
-    console.log(`Proxying to: ${url}`); // Bra för loggarna i Railway
+    console.log(`[LOGG] Anropar Företagsregister: ${url}`);
 
     const options = {
       method: req.method,
@@ -41,19 +44,18 @@ app.all("/foretag-proxy/*", async (req, res) => {
     const response = await fetch(url, options);
     const text = await response.text();
 
-    res.status(response.status);
-    res.type(response.headers.get("content-type") || "application/json");
-    res.send(text);
+    res.status(response.status).type(response.headers.get("content-type") || "application/json").send(text);
   } catch (err) {
+    console.error("[FEL]", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Gamla routen (nv0101)
-app.all("/scb-proxy/*", async (req, res) => {
+// 3. Den gamla routen för varor (nv0101)
+app.all("/scb-proxy*", async (req, res) => {
   try {
-    const path = req.params[0];
-    const url = `${BASE_URL_VAROR}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    const subPath = req.url.replace("/scb-proxy", "");
+    const url = `${BASE_URL_VAROR}${subPath}`;
 
     const options = {
       method: req.method,
@@ -69,12 +71,13 @@ app.all("/scb-proxy/*", async (req, res) => {
     const response = await fetch(url, options);
     const text = await response.text();
 
-    res.status(response.status);
-    res.type(response.headers.get("content-type") || "application/json");
-    res.send(text);
+    res.status(response.status).type(response.headers.get("content-type") || "application/json").send(text);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(process.env.PORT ||
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
