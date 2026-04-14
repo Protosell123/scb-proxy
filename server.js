@@ -11,20 +11,19 @@ const agent = new https.Agent({
   passphrase: process.env.CERT_PASSWORD
 });
 
-// Gamla bas-URL:en för varusök
 const BASE_URL_VAROR = "https://privateapi.scb.se/nv0101/v1/sokpavar";
-// NY bas-URL för företagsregistret (org-nummer)
 const BASE_URL_FORETAG = "https://privateapi.scb.se/uf0101/v1/foretag";
 
 app.get("/", (req, res) => {
   res.send("SCB proxy running with support for both Goods and Companies");
 });
 
-// Route för företagsuppslag (Används för org-nr)
-app.all("/foretag-proxy/*", async (req, res) => {
+// KORRIGERAD ROUTE: Notera '?' efter '*' för att göra path valfri
+app.all("/foretag-proxy/:path*", async (req, res) => {
   try {
-    const path = req.params[0];
-    const url = `${BASE_URL_FORETAG}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    // Vi bygger pathen mer robust här
+    const subPath = req.params.path + (req.params[0] || "");
+    const url = `${BASE_URL_FORETAG}/${subPath}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
 
     const options = {
       method: req.method,
@@ -48,14 +47,15 @@ app.all("/foretag-proxy/*", async (req, res) => {
   }
 });
 
-// Behåll den gamla proxyn så att din nuvarande filtrering inte går sönder
-app.all("/scb-proxy/*", async (req, res) => {
+// Gamla routen uppdaterad med samma logik för säkerhets skull
+app.all("/scb-proxy/:path*", async (req, res) => {
   try {
-    const path = req.params[0];
-    const url = `${BASE_URL_VAROR}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    const subPath = req.params.path + (req.params[0] || "");
+    const url = `${BASE_URL_VAROR}/${subPath}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
 
     const options = {
-      method: req.method,      agent,
+      method: req.method,
+      agent,
       headers: {}
     };
 
@@ -71,4 +71,8 @@ app.all("/scb-proxy/*", async (req, res) => {
     res.type(response.headers.get("content-type") || "application/json");
     res.send(text);
   } catch (err) {
-    res.status(
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.listen(process.env.PORT || 3000);
