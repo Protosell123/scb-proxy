@@ -15,15 +15,17 @@ const BASE_URL_VAROR = "https://privateapi.scb.se/nv0101/v1/sokpavar";
 const BASE_URL_FORETAG = "https://privateapi.scb.se/uf0101/v1/foretag";
 
 app.get("/", (req, res) => {
-  res.send("SCB proxy running with support for both Goods and Companies");
+  res.send("SCB proxy is active");
 });
 
-// KORRIGERAD ROUTE: Notera '?' efter '*' för att göra path valfri
-app.all("/foretag-proxy/:path*", async (req, res) => {
+// NY STRUKTUR: Företagsregistret (uf0101)
+app.all("/foretag-proxy/*", async (req, res) => {
   try {
-    // Vi bygger pathen mer robust här
-    const subPath = req.params.path + (req.params[0] || "");
-    const url = `${BASE_URL_FORETAG}/${subPath}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    // Tar allt efter /foretag-proxy/ och lägger på bas-URL:en
+    const path = req.params[0]; 
+    const url = `${BASE_URL_FORETAG}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+
+    console.log(`Proxying to: ${url}`); // Bra för loggarna i Railway
 
     const options = {
       method: req.method,
@@ -47,11 +49,11 @@ app.all("/foretag-proxy/:path*", async (req, res) => {
   }
 });
 
-// Gamla routen uppdaterad med samma logik för säkerhets skull
-app.all("/scb-proxy/:path*", async (req, res) => {
+// Gamla routen (nv0101)
+app.all("/scb-proxy/*", async (req, res) => {
   try {
-    const subPath = req.params.path + (req.params[0] || "");
-    const url = `${BASE_URL_VAROR}/${subPath}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
+    const path = req.params[0];
+    const url = `${BASE_URL_VAROR}/${path}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`;
 
     const options = {
       method: req.method,
@@ -75,4 +77,4 @@ app.all("/scb-proxy/:path*", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 3000);
+app.listen(process.env.PORT ||
